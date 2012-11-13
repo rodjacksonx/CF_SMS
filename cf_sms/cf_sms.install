@@ -1,0 +1,242 @@
+<?php
+
+/**
+ * @file
+ *   cf_sms.install
+ *
+ * Installation file for the CallFire SMS module
+ */
+
+
+/**
+ * Implementation of hook_schema().
+ */
+function cf_sms_schema() {
+
+  $schema = array();
+
+  $schema['cf_sms_numbers'] = array(
+    'description' => 'Stores your SMS numbers for use with CallFire SMS service(s).',
+    'fields' => array(
+      'number' => array(
+        'description' => "Primary key: the SMS number.",
+        'type' => 'varchar',
+        'length' => 15,
+        'not null' => TRUE,
+      ),
+      'label' => array(
+        'description' => 'Internal label describing this SMS number.',
+        'type' => 'varchar',
+        'length' => 255,
+        'default' => '',
+      ),
+			'enabled' => array(
+			  'description' => 'Whether the SMS is enabled in the module for use.',
+				'type' => 'int',
+				'unsigned' => TRUE,
+				'default' => 1,
+			),
+    ),
+    'primary key' => array('number')
+  );
+
+  $schema['cf_sms_users'] = array(
+    'description' => 'Stores users signed up for your CallFire SMS service(s).',
+    'fields' => array(
+      'id' => array(
+        'description' => "Primary key: the user's ID.",
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'number' => array(
+        'description' => "The user's mobile phone number.",
+        'type' => 'varchar',
+        'length' => 15,
+      ),
+      'last_sms' => array(
+        'description' => 'Timestamp of the last SMS sent to this user.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+      ),
+			'groupings' => array(
+			  'description' => 'Future use: what SMS groupings the user is in.',
+				'type' => 'varchar',
+				'length' => 255,
+				'default' => '',
+			),
+			'features' => array(
+			  'description' => "The SMS features the user is signed up for.",
+				'type' => 'varchar',
+				'length' => 255, // enough for roughly 30 features
+				'default' => '',
+			),
+    ),
+    'indexes' => array(
+      'last_sms' => array('last_sms'),
+    ),
+    'primary key' => array('id')
+  );
+
+  $schema['cf_sms_sends'] = array(
+    'description' => 'Records reference info for each CallFire broadcast.',
+    'fields' => array(
+      'id' => array(
+        'description' => "Primary key: the send ID (aka the CallFire broadcast ID.)",
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'message' => array(
+        'description' => "The message actually broadcast out.",
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'timestamp' => array(
+        'description' => 'Our timestamp of this broadcast.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+			'feature_id' => array(
+			  'description' => 'The opt-in feature ID of the feature the broadcast was for.',
+				'type' => 'varchar',
+				'length' => 63,
+			),
+			'data' => array(
+			  'description' => 'Extra data used to clarify send details for some features.',
+				'type' => 'varchar',
+				'length' => 255,
+			),
+			'from_num' => array(
+			  'description' => "The number the broadcast was shown from, if one was specified.",
+				'type' => 'varchar',
+				'length' => 15,
+				'default' => '', // empty indicates none was specified
+			),
+    ),
+    'indexes' => array(
+      'timestamp' => array('timestamp'),
+    ),
+    'primary key' => array('id')
+  );
+
+  $schema['cf_sms_send_numbers'] = array(
+    'description' => 'Records all numbers of all sends we made.',
+    'fields' => array(
+      'send_id' => array(
+        'description' => "The send ID (broadcast ID)",
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'user_id' => array(
+        'description' => "The user ID the send was for.",
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'number' => array(
+        'description' => "The user's mobile phone number.",
+        'type' => 'varchar',
+        'length' => 15,
+        'not null' => TRUE,
+      ),
+    ),
+    'indexes' => array(
+      'send_id' => array('send_id'),
+      'user_id' => array('user_id'),
+    ),
+  );
+
+  $schema['cf_sms_future_sends'] = array(
+    'description' => 'Stores sends scheduled to be broadcast in the future.',
+    'fields' => array(
+      'id' => array(
+        'description' => "Primary key: a unique ID per future send, for easier reference.",
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'message' => array(
+        'description' => "The message actually broadcast out.",
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'send_time' => array(
+        'description' => 'The (next) intended time to broadcast the message.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+			'feature_id' => array(
+			  'description' => 'The opt-in feature ID of the feature the broadcast was for.',
+				'type' => 'varchar',
+				'length' => 63,
+			),
+			'data' => array(
+			  'description' => 'Extra data used to facilitate a proper send with some features.',
+				'type' => 'varchar',
+				'length' => 255,
+			),
+			'from_num' => array(
+			  'description' => "The number the broadcast was shown from, if one was specified.",
+				'type' => 'varchar',
+				'length' => 15,
+				'default' => '', // empty indicates none was specified
+			),
+      'recurrence' => array(
+      	'description' => 'A code indicating when to resend a regularly occurring SMS broadcast.',
+      	'type' => 'varchar',
+      	'length' => 15,
+      	'default' => 'none', // indicates no repeat; only send once
+      	/* codes include:
+      		'none' - to explicitly indicate no recurrence
+      		'hourly' - same time every hour
+      		'daily' - same time every day
+      		'weekdays' - same time every weekday
+      		'weekly' - same day, same time every week
+      		'biweekly' - same day, same time every other week
+      		'monthly' - same day (1st, 25th, etc.), same time each month
+      		'weekday-month' - same day of week (1st Wed., 3rd Fri., etc.) in each month
+      		'annually' - same day (June 3, May 28, etc.), same time each year
+      	*/
+      ),
+    ),
+    'indexes' => array(
+      'send_time' => array('send_time'),
+      'feature_id' => array('feature_id'),
+    ),
+    'primary key' => array('id')
+  );
+
+  return $schema;
+}
+
+
+/**
+ * Implementation of hook_install().
+ *
+ * Installs the CallFire SMS module; particularly, installs the database schema
+ */
+function uc_bitpay_install() {
+  // Set the module weight so it can override other modules.
+  db_query("UPDATE {system} SET weight = 99 WHERE name = 'cf_sms'");
+  // install the schema for the database
+  drupal_install_schema('cf_sms');
+}
+
+
+/**
+ * Implementation of hook_uninstall()
+ *
+ * Uninstalls the CallFire SMS module.
+ */
+function cf_sms_uninstall() {
+  // Remove the schema
+  drupal_uninstall_schema('cf_sms');
+	// Remove relevant data from the DB
+  db_query("DELETE FROM {variable} WHERE name LIKE 'cf_sms_%%'");
+}

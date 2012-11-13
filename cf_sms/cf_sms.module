@@ -1,0 +1,880 @@
+<?php
+
+/**
+ * @file
+ * Enabling SMS from your website via CallFire.com
+ *
+ * @creation November 2012
+ * @author Rod Jackson (RDJ)
+ */
+ 
+
+require_once("cf_sms.optin.inc");
+require_once("cf_sms.response.inc");
+
+define('CF_SMS_OLD_SEND_THRESHOLD', 259200); // three days
+
+define('CF_SMS_DEAD_SEND_THRESHOLD', 604800); // one week
+ 
+define('CF_SMS_SIGNUP_MESSAGE', "Please choose which text messaging features you would like to receive.");
+
+
+/**
+ * Includes all the files for included and external feature functions
+ */
+// CODE BLOCK: _include_all_cf_sms_files
+
+	// get the features
+	$optins = _get_all_cf_sms_optin_features();
+	$responses = _get_all_cf_sms_response_features();
+	
+	// get the filenames of enabled features
+	$optin_fns = array();
+	foreach ($optins as $feature) {
+		if ($feature['enabled']) {$optin_fns[] = $feature['filename'];}
+	}
+	$response_fns = array();
+	foreach ($responses as $feature) {
+		if ($feature['enabled']) {$response_fns[] = $feature['filename'];}
+	}
+	
+	// merge the filename arrays and get rid of duplicates
+	$filenames = array_unique(array_merge($optin_fns, $response_fns));
+	
+	// require each file once
+	foreach ($filenames as $filename) {
+		require_once($filename);
+	}
+// end code block - _include_all_cf_sms_files
+
+
+
+/**
+ * Settings form for the CallFire SMS module.
+ */
+function cf_sms_settings() {
+
+	global $base_url;
+
+	$form = array();
+
+	/*$form['cf_sms_enabled'] = array(
+		'#type' => 'checkbox',
+		'#title' => t('Enable CallFire SMS features independent of other CallFire features.'),
+		'#default_value' => variable_get('cf_sms_enabled', FALSE),
+	);*/
+	$form['cf_sms_debug_mode'] = array(
+		'#type' => 'radios',
+		'#title' => t('Debug mode activation'),
+		'#options' => array(
+			0 => t('Allow anyone to sign up for SMS features.'),
+			1 => t('Only allow admins to sign up for SMS features.')
+		),
+		'#default_value' => variable_get('cf_sms_debug_mode', 0),
+    '#summary' => variable_get('cf_sms_debug_mode' ,0) ?
+			t('Debug mode is OFF: anyone can sign up for SMS features.') :
+			t('Debug mode is ON: only admins can sign up for SMS features.');
+		'#description' => t('This allows restricting SMS signup to only site administrators, primarily for testing and/or debugging purposes.'),
+	);
+	$form['cf_sms_signup_message'] = array(
+		'#type' => 'textfield',
+		'#title' => t('SMS signup message'),
+		'#default_value' => variable_get('cf_sms_signup_message', CF_SMS_SIGNUP_MESSAGE),
+		'#summary' => t('Current message to use to prompt users to sign up for SMS features:') .
+			'<br />' . variable_get('cf_sms_signup_message', CF_SMS_SIGNUP_MESSAGE);
+		'#description' =>
+			t('Message to display to prompt users to sign up for SMS features.'),
+	);
+
+	return $form;
+}
+
+
+/**
+ * Display help and module information
+ * @param path which path of the site we're displaying help
+ * @param arg array that holds the current path as would be returned from arg() function
+ * @return help text for the path
+ */
+function cf_sms_help($path, $arg) {
+	$o = '';  // declare your output variable
+	switch ($path) {
+		case "admin/help#cf_sms":
+			$o .= '<p>'. 
+				t('Implements sending and receiving SMS texts.') .'</p>';
+			break;
+	}
+	return $o;
+}
+
+
+/**
+ * Implementation of hook_user().
+ *
+ * Allows users to opt into or opt out of the available SMS opt-in features.
+ */
+function cf_sms_user($type, $edit, &$user, $category = NULL) {
+
+	// get user ID
+	$user_id = $user->uid;
+	if ($user_id <= 0) {
+		return;
+	}
+	// if SMS is in debug mode, but this isn't an admin, skip out
+	if (variable_get('cf_sms_debug_mode', 0) && !user_access('access administration menu')) {
+		return;
+	}
+	// if this isn't someone looking at their own profile, or an admin, skip out
+  if (($GLOBALS['user']->uid == $user_id) && !user_access('administer users')) {
+  	return;
+  }
+	
+	switch ($type) {
+	
+		case 'form':
+		
+			$data = db_query("SELECT mobile_num, features FROM {cf_sms_users} WHERE id = %d", $user_id);
+			if ($data === FALSE) {
+				$mobile_num = '';
+				$user_features = '';
+				db_query("INSERT INTO {cf_sms_user} id, mobile_num, features VALUES (%d, '', '')", $user_id);
+			else {
+				$record = db_fetch_array($data);
+				$user_features = $record['features'];
+				$mobile_num = $record['mobile_num'];
+			}
+			
+  		if ($category == 'account') {
+  		
+  			$form['cf_sms_user_passthru'] = array(
+  				'#type' => 'hidden',
+  				'#value' => $user_id
+  			);
+
+    		$form['cf_sms_user_settings'] = array(
+		      '#type' => 'fieldset',
+    		  '#title' => t('SMS notifications'),
+		      '#weight' => 3,
+		      '#collapsible' => TRUE,
+		      '#collapsed' => FALSE,
+    		);
+    		
+    		$form['cf_sms_user_settings']['cf_sms_optin_mobile_num'] = array(
+					'#type' => 'textfield',
+					'#title' => t('Mobile number for texting'),
+					'#default_value' => _cf_sms_display_mobile_num($mobile_num),
+					'#summary' => t('Mobile number to receive SMS notifications: ') . $mobile_num;
+					'#description' => t("Number where SMS notifications should be sent. (All texts will be sent from the U.S.; international numbers must be prefixed with '") . '<i>' . '011' . "</i>'.)"),
+				);
+    
+    		$form['cf_sms_user_settings']['cf_sms_optin_settings_prompt'] = array(
+					'#type' => 'item',
+					//'#title' => t('SMS settings prompt text'),
+					//'#description' => t('This is just a prompt for the user to set his SMS features.');
+					'#value' => variable_get('cf_sms_signup_message', CF_SMS_SIGNUP_MESSAGE),
+    		);
+    		
+				// loop through all SMS opt-in features
+		    $all_features = _get_all_cf_sms_optin_features();
+    		foreach ($all_features as $feature) {
+
+					// if the feature is enabled, add it to the form
+					$feature_id = $feature['id'];
+	  		  $feature_id_enabled = 'cf_sms_optin_feature_' . $feature_id . '_enabled';
+					if (variable_get($feature_id_enabled, 0)) {
+		  		  $tagged_feature_id = ':' . $feature_id . ';';
+		  		  $feature_id_signed_up = 'cf_sms_optin_feature_' . $feature_id . '_signedup';
+						$pos = strpos($user_features, $tagged_feature_id);
+						$form['cf_sms_user_settings'][$feature_id_signedup] = array(
+							'#type' => 'checkbox',
+							'#title' => $feature['text'],
+							'#default_value' => !($pos === FALSE),
+							//'#element_validate' => 'cf_sms_user_form_validate',
+						);
+      		}
+      		
+    		}
+
+		    return $form;
+  		}
+  
+  		break;
+  		
+  	case 'view':
+
+			// Do not show the options in the view page; since the SMS options
+			// are not part of the user profile, it may be best to not touch this.
+			break;
+			
+  }
+
+}
+
+
+/**
+ * Alter various forms to enable SMS settings, features, etc.
+ */
+function cf_sms_form_alter(&$form, &$form_state, $form_id) {
+
+	switch ($form_id) {
+	
+		// store the checked features on the user profile page into the DB
+		case 'user_profile_form':
+		
+			$form['#validate'][] = 'cf_sms_user_settings_validate';
+			break;
+			
+		// allow the user to signup during checkout if using Ubercart
+		case 'uc_cart_checkout_form':
+		
+			$form['#validate'][] = 'cf_sms_user_settings_validate';
+			break;
+			
+		// special case for the 'ship' opt-in feature, so it'll trigger on a form submit
+		case 'uc_order_view_update_form':
+			
+			$form['#validate'][] = 'cf_sms_optin_feature_ship_check';
+			break;
+  }
+
+}
+
+
+/**
+ * A validation routine for the user profile form, that takes their SMS
+ * settings and stores their opted-in (and not-opted-in) features in the DB.
+ */
+function cf_sms_user_settings_validate($form, &$form_state) {
+
+	// get the user ID
+	$user_id = $form['cf_sms_user_passthru'];
+	if ((!variable_get('cf_sms_enabled', 0)) || ($user_id <= 0)) {
+		return;
+	}
+	
+	// get the user's SMS opt-in features list;
+	// if no record found, create a new, blank one
+	$data = db_query("SELECT features FROM {cf_sms_users} WHERE id = %d", $user_id);
+	if ($data === FALSE) {
+		$features = '';
+		db_query("INSERT INTO {cf_sms_users} id, mobile_num, features VALUES (%d, '%s', '')", $user_id, '0');
+	}
+	else {
+		$features = db_result($data);
+	}
+	
+	// presume that a blank mobile number, or a mobile number of 0,
+	// indicates the user is unsubscribing from all features
+	$mobile_num = _cf_sms_extract_mobile_num($form['cf_sms_optin_mobile_num']);
+	if ((strlen($mobile_num) < 1) || ($mobile_num == '0')) {
+		$features = '';
+		$mobile_num = '';
+	}
+	else {
+
+		// loop through and check all form elements
+		foreach ($form as $key => $form_element_value) {
+	
+			// determine if the form element is a CallFire SMS opt-in feature setting
+			$pos = strpos($key, 'cf_sms_optin_feature_');
+			if ($pos === 0) {
+				$is_cf_sms_optin = TRUE;
+				$feature_id = substr_replace(substr($key, 21), '', -9); // chop off the prefix and '_signedup' suffix
+				$feature_is_enabled = !!$form_element_value;
+			}
+			else {
+				$is_cf_sms_optin = FALSE;
+			}
+			
+			// if so, we may need to update the user's features list
+			if ($is_cf_sms_optin) {
+		
+				// check if the user is signed up for the feature
+				$tagged_feature_id = ':' . $feature_id . ';';
+				$pos = strpos($features, $tagged_feature_id);
+		
+				// if the feature is checked, but the user isn't signed up, make a change
+				if ($feature_is_enabled && ($pos === FALSE)) {
+					$features .= $tagged_feature_id;
+				}
+				// if the feature isn't checked, but the user is signed up, make a change
+				elseif ((!$feature_is_enabled) && ($pos !== FALSE)) {
+					$features = str_replace($tagged_feature_id, '', $features);
+				}
+		
+			}
+		
+		} // end foreach loop through all form elements
+		
+	} // end check for a blank mobile number
+	
+	db_query("UPDATE {cf_sms_users} SET mobile_num = '%s', features = '%s' WHERE id = %d", $mobile_num, $features, $user_id);
+	
+	// while we're here, do the next scheduled sends
+	cf_sms_execute_next_scheduled_sends();
+	
+}
+
+
+/*
+ * Executes the next scheduled sends that are within 60 seconds of needing
+ * to occur. Also executes all sends that are scheduled but their time has
+ * passed, up to the threshold time later (originally 3 days.) Any scheduled
+ * sends older than that are either updated to the next recurrence, or if
+ * once-only (or older than the dead threshold) are deleted.
+ */
+function cf_sms_execute_next_scheduled_sends() {
+
+	$t = time();
+	$t_plus_one_min = $t + 60;
+	$t_minus_old_threshold = $t - CF_SMS_OLD_SEND_THRESHOLD; // originally three days
+	
+	// first thing: delete all scheduled sends older than the dead threshold
+	db_query("DELETE FROM {cf_sms_future_sends} WHERE send_time < %d", $t - CF_SMS_DEAD_SEND_THRESHOLD);
+
+	// now, pull out the rest of the sends for now or the past; we either need to
+	// do them now, or if they're old (not dead), schedule them for the next recurrence
+	$data = db_query("SELECT * FROM {cf_sms_future_sends} WHERE send_time < %d ORDER BY send_time", $t_plus_one_min);
+	
+	// since we will be doing updates & deletions while looping,
+	// let's store the data in an array instead of a DB object
+	$records = array();
+	while ($record = db_fetch_array($data)) {
+		$records[] = $record;
+	}
+	
+	// loop through and deal with the sends we pulled
+	foreach ($records as $record) {
+	
+		$delete = false;
+		
+		// if the scheduled send isn't too old, we try to execute it
+		if ($record['send_time'] > $t_minus_old_threshold) {
+		
+			$funcname = 'cf_sms_optin_feature_' . $record['feature_id'];
+			if (function_exists($funcname)) {
+				// call the function to do the send for the feature
+				if ($record['from_num'] == '') {
+					$from_num = false;
+				}
+				else {
+					$from_num = $record['from_num'];
+				}
+				call_user_func($funcname, $record['message'], $from_num, $record['data']);
+			}
+			else {
+				// if function doesn't exist, it may be a removed external function;
+				// in any case, a future send that can't be executed should be removed
+				$delete = true;
+			}
+		}
+		
+		// if we aren't already sure we're going to delete the send, just
+		// advance it to a future date (unless it's a non-recurring send)
+		if (!$delete) {
+			// get the next scheduled time to send based on recurrence,
+			// advancing multiple times until we get a future time
+			$new_time = $record['send_time'];
+			$recurrence = $record['recurrence'];
+			do {
+				$new_time = _update_time_based_on_recurrence($new_time, $recurrence);
+			}
+			while (($new_time != 0) && ($new_time <= $t));
+			
+			if ($new_time == 0) {
+				$delete = true;
+			}
+		}
+		
+		// now we can confidently delete flagged sends
+		if ($delete) {
+			db_query("DELETE FROM {cf_sms_future_sends} WHERE id = %d", $record['id']);
+		}
+		// otherwise, update the DB with the next scheduled time
+		else {
+			db_query("UPDATE {cf_sms_future_sends} SET send_time = %d WHERE id = %d", $new_time, $record['id']);
+		}
+		
+	} // end foreach - loop through all pulled records of current/old (not dead) sends
+	
+	// all sends have now been dealt with;
+	// return how long it took, on the chance
+	// we ever need to check execution time
+	return (time() - $t);
+	
+} // end function - cf_sms_execute_next_scheduled_sends
+
+
+/**
+ * Let the main CallFire module know this service (SMS) is here
+ */
+function cf_sms_callfire_service() {
+
+	$services = array();
+	
+	$services[] = array(
+		'id' => 'cf_sms',
+		'name' => t('CallFire SMS'),
+		'desc' => t('Enable the CallFire SMS service.'),
+		'weight' => -10,
+	);
+
+	return $services;
+}
+
+
+/**
+ *
+ * Runs functions for all opt-in features that require cron. To make use of,
+ * after creating your external feature function (say, cf_sms_optin_feature_example),
+ * create a function for cron to call (in this case, cf_sms_optin_feature_example_cron)
+ *
+ */
+function cf_sms_cron() {
+
+	// execute scheduled sends
+	cf_sms_execute_next_scheduled_sends();
+
+	// get the IDs of all the opt-in features
+	$optins = _get_all_cf_sms_optin_features();
+
+	// execute the cron functions for the features
+	foreach ($optins as $feature) {
+		$funcname = 'cf_sms_optin_feature_' . $feature['id'] . '_cron';
+		if (function_exists($funcname)) {
+			call_user_func($funcname);
+		}
+	}
+
+}
+
+
+/**
+ * Gather all the SMS opt-in features by invoking all the hooks for them
+ */
+function _get_all_cf_sms_optin_features() {
+
+	$features = module_invoke_all('cf_sms_optin_features');
+	
+	return $features;
+}
+
+
+/**
+ * Return the default, built-in opt-in features as an array
+ */
+function cf_sms_cf_sms_optin_features() {
+
+	$features = array();
+	
+	// Ship Notification: send user an SMS when their order ships
+	$features[] = array(
+		'id' => 'ship',
+		'name' => 'Shipment notification',
+		'text' => 'Receive an SMS whenever your order ships.',
+		'filename' => 'cf_sms.optin.ship.inc',
+		'enabled' => variable_get('cf_sms_optin_feature_ship_enabled', FALSE),
+		//'funcname' => 'cf_sms_optin_feature_ship',
+	);
+	
+	// General Promotions: send user an SMS whenever any sort of promotion is announced
+	$features[] = array(
+		'id' => 'promos',
+		'name' => 'Promotions signup',
+		'text' => 'Receive an SMS whenever any promotion is announced.',
+		'filename' => 'cf_sms.optin.inc',
+		'enabled' => variable_get('cf_sms_optin_feature_promos_enabled', FALSE),
+		//'funcname' => 'cf_sms_optin_feature_promos',
+	);
+	
+	// General Info: send user an SMS when any general site information is released
+	$features[] = array(
+		'id' => 'info',
+		'name' => 'Info signup',
+		'text' => 'Receive an SMS whenever any general site info is released.',
+		'filename' => 'cf_sms.optin.inc',
+		'enabled' => variable_get('cf_sms_optin_feature_info_enabled', FALSE),
+		//'funcname' => 'cf_sms_optin_feature_info',
+	);
+	
+	return $features;
+
+} // end function - cf_sms_cf_sms_optin_features
+
+
+/**
+ * Gather all the SMS response features by invoking all the hooks for them
+ */
+function _get_all_cf_sms_response_features() {
+
+	$features = module_invoke_all('cf_sms_response_features');
+	
+	return $features;
+}
+
+
+/**
+ * Return the default, built-in response features as an array
+ */
+function cf_sms_cf_sms_response_features() {
+
+	$features = array();
+	
+	// STOP: user sends this to stop receiving an SMS features, or all features
+	$features[] = array(
+		'id' => 'stop',
+		'name' => 'Stop SMS sends',
+		'text' => 'Stops either the latest SMS feature sent to the user, or all of them.',
+		'filename' => 'cf_sms.response.inc',
+		'codeword' => 'STOP',
+		'enabled' => variable_get('cf_sms_response_feature_stop_enabled', FALSE),
+		//'funcname' => 'cf_sms_response_feature_stop',
+	);
+	
+	// HELP: user sends this to get a helpful SMS (or two) about response features
+	$features[] = array(
+		'id' => 'help',
+		'name' => 'Get SMS help',
+		'text' => 'Receive an SMS with details on using the features or getting more info.',
+		'filename' => 'cf_sms.response.inc',
+		'codeword' => array('HELP', '?'),
+		'enabled' => variable_get('cf_sms_response_feature_help_enabled', FALSE),
+		//'funcname' => 'cf_sms_response_feature_help',
+	);
+	
+	// NEW: user sends this to get a copy of the latest promo or info SMS
+	$features[] = array(
+		'id' => 'new',
+		'name' => 'Receive newest SMS',
+		'text' => 'Receive an SMS of the latest promo or info without signing up.',
+		'filename' => 'cf_sms.response.inc',
+		'codeword' => array('NEW', 'NEWEST', 'LATEST'),
+		'enabled' => variable_get('cf_sms_response_feature_new_enabled', FALSE),
+		//'funcname' => 'cf_sms_response_feature_new',
+	);
+	
+	// DAMAGE: user sends this to report a damaged shipment
+	$features[] = array(
+		'id' => 'damage',
+		'name' => 'Report damaged shipment',
+		'text' => "Reports that the user's latest shipment was damaged, and responds accordingly.",
+		'filename' => 'cf_sms.response.inc',
+		'codeword' => array('DAMAGE', 'DAMAGED', 'DAMAGES'),
+		'enabled' => variable_get('cf_sms_response_feature_damage_enabled', FALSE),
+		//'funcname' => 'cf_sms_response_feature_damage',
+	);
+	
+	// SIGNUP: user sends this to signup remotely for a specific opt-in feature
+	$features[] = array(
+		'id' => 'signup',
+		'name' => 'Signup for feature',
+		'text' => "Lets the user signup for a specific opt-in feature remotely.",
+		'filename' => 'cf_sms.response.inc',
+		'codeword' => 'SIGNUP',
+		'enabled' => variable_get('cf_sms_response_feature_signup_enabled', FALSE),
+		//'funcname' => 'cf_sms_response_feature_signup',
+	);
+
+	return $features;
+
+} // end function - cf_sms_cf_sms_response_features
+
+
+/**
+ * Given a timestamp, and a code indicating the frequency of recurrence ('daily',
+ * 'weekly', etc.) returns the timestamp for the event to be scheduled to occur next
+ */
+function _update_time_based_on_recurrence($t, $recur) {
+
+	switch ($recur) {
+	
+		case 'annually':
+
+			// add one year to the time; if they try to recur on
+			// Feb. 29 annually, they'll get whatever they get
+			$d = getdate($t);
+			$updated_t = mktime($d['hours'], $d['minutes'], $d['seconds'], $d['mon'], $d['mday'], $d['year'] + 1);
+			break;
+
+		case 'monthly':
+		
+			// add one month to the time
+			// (rollover so we can validate)
+			$d = getdate($t);
+			$month = $d['mon'] + 1;
+			if ($month > 12) {
+				$month = 1;
+				$year = $d['year'];
+			}
+			else {
+				$year = $d['year'];
+			}
+			
+			// make sure it's a real date (that the month has enough days)
+			$time = $d; // only 'hours', 'minutes', & 'seconds' will be extracted
+			$updated_t = _is_it_a_real_date($d['mday'], $month, $year, $time);
+			if ($updated_t == FALSE) {
+				// if it's not a real date, we can safely advance two months w/ mktime and be guaranteed a valid date
+				$updated_t = mktime($d['hours'], $d['minutes'], $d['seconds'], $d['mon'] + 2, $d['mday'], $d['year']);
+			}
+			break;
+			
+		case 'weekday-month':
+		
+			// cycles through the Xth weekday of the month; for example,
+			// the 2nd Thursday of each month, or even the 5th Sunday of each
+			// month (skipping months as necessary.)
+			
+			// get the date, including weekday, and determine
+			// which of the weekdays it is (1st, 2nd, 3rd, etc.)
+			$d = getdate($t);
+			$md = $d['mday'];
+			$xth = 1;
+			while ($md > 7) {
+				$md -= 7;
+				$xth++;
+			}
+
+			// store these for use later
+			$month = $d['mon'];
+			$year = $d['year'];
+			$hour = $d['hours'];
+			$min = $d['minutes'];
+			$sec = $d['seconds'];
+			$weekday = $d['wday'];
+			$time = array('hours' => $hour, 'minutes' => $min, 'seconds' => $sec)
+			
+			// we'll just do this in a straightforward fashion; advance to
+			// the next month, then find the Xth weekday of that month. If
+			// none, skip ahead another month until a valid one is found.
+			do {
+				// advance to the next month (wrap around after December)
+				$month++;
+				if ($month > 12) {
+					$month = 1;
+					$year++;
+				}
+				// determine the day of the week of the first day of that month & year
+				$d = getdate(mktime($hour, $min, $sec, $month, 1, $year));
+				$wday = $d['wday'];
+				// find out what day of the month the 1st weekday of the month is
+				if ($wday <= $weekday) {
+					$mday = $weekday - $wday + 1;
+				}
+				elseif ($wday > $weekday) {
+					$mday = $weekday - $wday + 8;
+				}
+				// now $mday represents the first weekday of the month;
+				// advance to the Xth weekday of the month
+				$mday_of_xth_wday = $mday + (7 * ($xth - 1));
+				// check to make sure it's a real date;
+				// we'll get a timestamp if it is, or else FALSE
+				$updated_t = _is_it_a_real_date($mday_of_xth_wday, $month, $year, $time);
+			}
+			while ($updated_t == FALSE);
+
+			break;
+
+		case 'biweekly':
+		
+			// add 1209600 seconds to advance two weeks
+			$updated_t = $t + 1209600;
+			break;
+
+		case 'weekly':
+		
+			// add 604800 seconds to advance to the next week
+			$updated_t = $t + 604800;
+			break;
+		
+		case 'weekdays':
+		
+			// add 86400 seconds to advance to the next day; then, if it's
+			// not a weekday, keep adding 86400 seconds until it is
+			$updated_t = $t + 86400;
+			$d = getdate($updated_t);
+			while (($d['wday'] == 0) || ($d['wday'] == 6) {
+				$updated_t += 86400;
+				$d = getdate($updated_t);
+			}
+			break;
+
+		case 'daily':
+		
+			// just add 86400 seconds to advance to the next day
+			$updated_t = $t + 86400;
+			break;
+		
+		case 'hourly':
+		
+			// just add 3600 seconds to advance to the next hour
+			$updated_t = $t + 3600;
+			break;
+		
+		case 'none':
+		default:
+		
+			// there is not supposed to be a recurrence; there is no updated time
+			$updated_t = 0;
+	}
+	
+	return $updated_t;
+
+} // end function - _update_time_based_on_recurrence
+
+
+/**
+ * Returns the user IDs and mobile numbers of all users signed up for a specific SMS opt-in feature
+ */
+function _get_signups_for_sms_feature($feature_id) {
+
+	$signups = array();
+	// all feature IDs in this field are prefixed by ':', and suffixed by ';'
+	$tagged_feature_id = ':' . $feature_id . ';';
+	$data = db_query("SELECT id, mobile_num FROM {cf_sms_users} WHERE features LIKE '%%%s%%'", $tagged_feature_id);
+	while ($record = db_fetch_array($data)) {
+		$signups[] = $record;
+	}
+	return $signups;
+
+}
+
+
+/**
+ * Signs up the specified user for the specified SMS opt-in feature
+ */
+function _signup_user_for_sms_feature($user_id, $feature_id) {
+
+	// all feature IDs in this field are prefixed by ':', and suffixed by ';'
+	$tagged_feature_id = ':' . $feature_id . ';';
+	$features = db_result(db_query("SELECT features FROM {cf_sms_users} WHERE id = %d", $user_id));
+	$pos = strpos($features, $tagged_feature_id);
+	// if we didn't find the string, we know the user isn't already signed up
+	if ($pos === FALSE) {
+		$features .= $tagged_feature_id;
+		db_query("UPDATE {cf_sms_users} SET features = '%s' WHERE id = %d", $features, $user_id);
+	}
+
+}
+
+
+/**
+ * Unsigns the specified user from the specified SMS opt-in feature
+ */
+function _unsign_user_from_sms_feature($user_id, $feature_id) {
+
+	// all feature IDs in this field are prefixed by ':', and suffixed by ';'
+	$tagged_feature_id = ':' . $feature_id . ';';
+	$features = db_result(db_query("SELECT features FROM {cf_sms_users} WHERE id = %d", $user_id));
+	$features = str_replace($tagged_feature_id, '', $features);
+	db_query("UPDATE {cf_sms_users} SET features = '%s' WHERE id = %d", $features, $user_id);
+
+}
+
+
+/**
+ * Returns TRUE if the user has been signed up for the specified SMS opt-in feature
+ */
+function _user_is_signed_up_for_sms_feature($user_id, $feature_id) {
+
+	// all feature IDs in this field are prefixed by ':', and suffixed by ';'
+	$tagged_feature_id = ':' . $feature_id . ';';
+	$features = db_result(db_query("SELECT features FROM {cf_sms_users} WHERE id = %d", $user_id));
+	$pos = strpos($features, $tagged_feature_id);
+	// if we didn't find the string, the user wasn't signed up
+	if ($pos === FALSE) {return FALSE;} else {return TRUE;}
+
+}
+
+
+/**
+ * Displays an unformatted mobile number (just a string of digits) with dashes, etc.
+ * for ease of visual recognition. Strongly biased toward U.S. mobile numbers.
+ */
+function _cf_sms_display_mobile_num($num) {
+
+	// check if the international 011 prefix is present
+	if (substr($num, 0, 3) == '011') {
+		// international prefix is present, so separate that, then show the rest of the digit string
+		$ret_num = '+011 ' . substr($num, 3);
+	}
+	else {
+		// if 11+ digits, don't format; just return the digit string
+		$L = strlen($num);
+		if ($L >= 11) {
+			$ret_num = $num;
+		}
+		// if 10 digits, show area code separate, and standard U.S. 7-digit format
+		elseif ($L == 10) {
+			$ret_num = '(' . substr($num, 0, 3) . ') ' . substr($num, 3, 3) . '-' . substr($num, 6, 4);
+		}
+		// if less than 10 digits, don't format, just return the digit string
+		else {
+			$ret_num = $num;
+		}
+	}
+	
+	return $ret_num;
+}
+
+
+/**
+ * Takes an entered mobile number, formatted in any way desired, and just extracts the
+ * number itself by stripping out any non-digits and returning only a string of digits
+ */
+function _cf_sms_extract_mobile_num($num) {
+
+	$ret_num = '';
+	
+	for ($i = 0; $i < strlen($num); $i++) {
+	
+		$d = $num[$i];
+		
+		if (($d >= '0') && ($d <= '9')) {
+			$ret_num .= $d;
+		}
+	}
+	
+	return $ret_num;
+}
+
+
+/**
+ * Returns non-boolean TRUE if the date is real (specifically, the actual timestamp of the
+ * date matches,) otherwise FALSE for "fake" dates (for ex.: Feb. 29, 2013 or 2012/13/-1)
+ * Just like PHP's time functions, day should be a number 1-31, month is 1-12, year is four
+ * digits. May optionally include an array with elements 'hours', 'minutes' and 'seconds'.
+ */
+function _is_it_a_real_date($day, $month, $year, $time = FALSE) {
+
+	if (($time !== FALSE) && is_array($time)) {
+		$t = mktime($time['hours'], $time['minutes'], $time['seconds'], $month, $day, $year);
+	}
+	else {
+		$t = mktime(0, 0, 0, $month, $day, $year);
+	}
+	
+	$d = getdate($t);
+	$real = $t;
+	if (($d['mday'] != $day) || ($d['mon'] != $month) || ($d['year'] != $year)) {
+		$real = FALSE;
+	}
+	
+	return $real;
+}
+
+
+/**
+ * Given an array of arrays, and a key present in each of the subarrays,
+ * returns the values of those subelements with the given key.
+ */
+function _array_subvalues($arr, $key) {
+
+	$ret = array();
+	
+	foreach ($arr as $row) {
+		$ret[] = $row[$key];
+	}
+	
+	return $ret;
+}

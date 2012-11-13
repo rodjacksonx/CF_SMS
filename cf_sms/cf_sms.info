@@ -1,0 +1,5 @@
+name = "CallFire SMS"
+description = "Enables the broadcasting and receiving of text messages via CallFire's API."
+dependencies[] = callfire
+package = CallFire
+core = 6.x

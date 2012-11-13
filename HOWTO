@@ -1,0 +1,19 @@
+HOW-TO: INSTRUCTIONS FOR USING CALLFIRE SMS
+
+This module is designed for use with version 6.x of Drupal, and the general-purpose CallFire module. It allows your website to send and receive SMS messages using CallFire.com's API.
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+To use this module:
+
+(1) Ensure you have the proper versions of Drupal (6.x).
+
+(2) Sign up for an account with CallFire, at https://callfire.com. Be sure to read all provided information thoroughly, and to understand the fees that will be charged.
+
+(3) Install and enable the CallFire module. Follow the HOWTO for that module to finish it's setup before installing this module. <unfinished>.
+
+(4) Place the folder 'cf_sms' into the proper location on your server. <unfinished>.
+
+(5) Enable the module. As an administrator on your website, view the 'Modules' section of 'Site Building'. The module will be found under <unfinished>.
+
+(6) Configure the module settings. Navigate to <unfinished>. The settings have descriptions to let you know what they are for, and whether or not to set them. <unfinished>.
