@@ -11,12 +11,6 @@
 
 define('CALLFIRE_WEBSITE', "https://callfire.com");
  
-define ('BITPAY_SMALL_LOGO_FILE', "/img/bitpay23.png");
- 
-define ('BITCOIN_ACCEPTED_LOGO_FILE', "/bitcoin-accepted.png");
-
-define ('BITCOIN_ACCEPTED_LOGO_PATH', base_path() . drupal_get_path('module', 'uc_bitpay') . BITCOIN_ACCEPTED_LOGO_FILE);
-
 define('CF_SMS_SIGNUP_MESSAGE', "Please choose which text messaging features you would like to receive.");
 
 
