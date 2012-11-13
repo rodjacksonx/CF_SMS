@@ -49,7 +49,7 @@ function cf_sms_schema() {
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
-      'number' => array(
+      'mobile_num' => array(
         'description' => "The user's mobile phone number.",
         'type' => 'varchar',
         'length' => 15,
