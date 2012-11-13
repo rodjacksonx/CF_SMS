@@ -58,12 +58,14 @@ function cf_sms_settings() {
 
 	$form = array();
 
-	/*$form['cf_sms_enabled'] = array(
-		'#type' => 'checkbox',
-		'#title' => t('Enable CallFire SMS features independent of other CallFire features.'),
-		'#default_value' => variable_get('cf_sms_enabled', FALSE),
-	);*/
-	$form['cf_sms_debug_mode'] = array(
+	$form['general'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('General SMS feature settings'),
+		'#collapsible' => TRUE,
+		'#collapsed' => FALSE,
+	);
+
+	$form['general']['cf_sms_debug_mode'] = array(
 		'#type' => 'radios',
 		'#title' => t('Debug mode activation'),
 		'#options' => array(
@@ -76,8 +78,10 @@ function cf_sms_settings() {
 			t('Debug mode is ON: only admins can sign up for SMS features.'),
 		'#description' => t('This allows restricting SMS signup to only site administrators, primarily for testing and/or debugging purposes.'),
 	);
-	$form['cf_sms_signup_message'] = array(
-		'#type' => 'textfield',
+	$form['general']['cf_sms_signup_message'] = array(
+		'#type' => 'textarea',
+		'#rows' => 3,
+		'#resizable' => FALSE,
 		'#title' => t('SMS signup message'),
 		'#default_value' => variable_get('cf_sms_signup_message', CF_SMS_SIGNUP_MESSAGE),
 		'#summary' => t('Current message to use to prompt users to sign up for SMS features:') .
@@ -85,6 +89,12 @@ function cf_sms_settings() {
 		'#description' =>
 			t('Message to display to prompt users to sign up for SMS features.'),
 	);
+
+	$features = cf_sms_feature_settings();
+	
+	foreach ($features as $key => $feature) {
+		$form[$key] = $feature;
+	}
 
 	return $form;
 }
@@ -137,7 +147,7 @@ function cf_sms_user($type, $edit, &$user, $category = NULL) {
 			if ($data === FALSE) {
 				$mobile_num = '';
 				$user_features = '';
-				db_query("INSERT INTO {cf_sms_user} id, mobile_num, features VALUES (%d, '', '')", $user_id);
+				db_query("INSERT INTO {cf_sms_user} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
 			}
 			else {
 				$record = db_fetch_array($data);
@@ -165,7 +175,7 @@ function cf_sms_user($type, $edit, &$user, $category = NULL) {
 					'#title' => t('Mobile number for texting'),
 					'#default_value' => _cf_sms_display_mobile_num($mobile_num),
 					'#summary' => t('Mobile number to receive SMS notifications: ') . $mobile_num,
-					'#description' => t("Number where SMS notifications should be sent. (All texts will be sent from the U.S.; international numbers must be prefixed with '") . '<i>' . '011' . "</i>'.)",
+					//'#description' => t("Number where SMS notifications should be sent. (All texts will be sent from the U.S.; international numbers must be prefixed with '") . '<i>' . '011' . "</i>'.)",
 				);
     
     		$form['cf_sms_user_settings']['cf_sms_optin_settings_prompt'] = array(
@@ -188,7 +198,7 @@ function cf_sms_user($type, $edit, &$user, $category = NULL) {
 						$pos = strpos($user_features, $tagged_feature_id);
 						$form['cf_sms_user_settings'][$feature_id_signedup] = array(
 							'#type' => 'checkbox',
-							'#title' => $feature['text'],
+							'#title' => '<b>' . $feature['name'] . ':</b> ' . $feature['text'],
 							'#default_value' => !($pos === FALSE),
 							//'#element_validate' => 'cf_sms_user_form_validate',
 						);
@@ -248,7 +258,7 @@ function cf_sms_form_alter(&$form, &$form_state, $form_id) {
 function cf_sms_user_settings_validate($form, &$form_state) {
 
 	// get the user ID
-	$user_id = $form['cf_sms_user_passthru'];
+	$user_id = $form_state['values']['cf_sms_user_passthru'];
 	if ((!variable_get('cf_sms_enabled', 0)) || ($user_id <= 0)) {
 		return;
 	}
@@ -258,7 +268,7 @@ function cf_sms_user_settings_validate($form, &$form_state) {
 	$data = db_query("SELECT features FROM {cf_sms_users} WHERE id = %d", $user_id);
 	if ($data === FALSE) {
 		$features = '';
-		db_query("INSERT INTO {cf_sms_users} id, mobile_num, features VALUES (%d, '%s', '')", $user_id, '0');
+		db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '%s', '')", $user_id, '0');
 	}
 	else {
 		$features = db_result($data);
@@ -266,7 +276,7 @@ function cf_sms_user_settings_validate($form, &$form_state) {
 	
 	// presume that a blank mobile number, or a mobile number of 0,
 	// indicates the user is unsubscribing from all features
-	$mobile_num = _cf_sms_extract_mobile_num($form['cf_sms_optin_mobile_num']);
+	$mobile_num = _cf_sms_extract_mobile_num($form_state['values']['cf_sms_optin_mobile_num']);
 	if ((strlen($mobile_num) < 1) || ($mobile_num == '0')) {
 		$features = '';
 		$mobile_num = '';
@@ -274,7 +284,7 @@ function cf_sms_user_settings_validate($form, &$form_state) {
 	else {
 
 		// loop through and check all form elements
-		foreach ($form as $key => $form_element_value) {
+		foreach ($form_state['values'] as $key => $form_element_value) {
 	
 			// determine if the form element is a CallFire SMS opt-in feature setting
 			$pos = strpos($key, 'cf_sms_optin_feature_');
@@ -414,14 +424,76 @@ function cf_sms_callfire_service() {
 	$services = array();
 	
 	$services[] = array(
-		'id' => 'cf_sms',
+		'id' => 'sms',
 		'name' => t('CallFire SMS'),
 		'desc' => t('Enable the CallFire SMS service.'),
+		'callback' => 'cf_sms_settings',
 		'weight' => -10,
 	);
 
 	return $services;
 }
+
+
+/**
+ * Returns all the features, both opt-in and response, for the CallFire SMS
+ * service, so that they can be enabled or disabled from the main settings
+ */
+function cf_sms_feature_settings() {
+
+	$features = array();
+	
+	$features['optins'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Opt-in feature settings'),
+		'#collapsible' => TRUE,
+		'#collapsed' => TRUE,
+	);
+	
+	$features['responses'] = array(
+		'#type' => 'fieldset',
+		'#title' => t('Response feature settings'),
+		'#collapsible' => TRUE,
+		'#collapsed' => TRUE,
+	);
+	
+	$optin_features = _get_all_cf_sms_optin_features();
+	
+	$response_features = _get_all_cf_sms_response_features();
+	
+	foreach ($optin_features as $feature) {
+		$feature_id = $feature['id'];
+		$feature_id_enabled = 'cf_sms_optin_feature_' . $feature_id . '_enabled';
+		$features['optins'][$feature_id_enabled] = array(
+			'#type' => 'checkbox',
+			'#title' => '<b>' . $feature['name'] . ':</b> ' . $feature['text'],
+			'#default_value' => $feature['enabled'],
+		);
+	}
+	
+	foreach ($response_features as $feature) {
+		$feature_id = $feature['id'];
+		$feature_id_enabled = 'cf_sms_response_feature_' . $feature_id . '_enabled';
+		if (is_array($feature['codeword'])) {
+			$codeword = 'Codewords ';
+			foreach ($feature['codeword'] as $word) {
+				$codeword .= $word . ', ';
+			}
+			$codeword = substr_replace($codeword, '', -2); // gets rid of last ", "
+		}
+		else {
+			$codeword = 'Codeword ' . $feature['codeword'];
+		}
+		$features['responses'][$feature_id_enabled] = array(
+			'#type' => 'checkbox',
+			'#title' => '<b>' . $codeword . ':</b> ' . $feature['text'],
+			'#default_value' => $feature['enabled'],
+		);
+	}
+	
+	return $features;
+	
+} // end function - cf_sms_feature_settings
 
 
 /**
