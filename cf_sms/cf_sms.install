@@ -221,7 +221,7 @@ function cf_sms_schema() {
  *
  * Installs the CallFire SMS module; particularly, installs the database schema
  */
-function uc_bitpay_install() {
+function cf_sms_install() {
   // Set the module weight so it can override other modules.
   db_query("UPDATE {system} SET weight = 99 WHERE name = 'cf_sms'");
   // install the schema for the database

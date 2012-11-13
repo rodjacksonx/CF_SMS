@@ -9,8 +9,6 @@
  */
  
 
-require_once("cf_sms.pages.inc");
-
 define('CALLFIRE_WEBSITE', "https://callfire.com");
  
 define ('BITPAY_SMALL_LOGO_FILE', "/img/bitpay23.png");
@@ -131,7 +129,7 @@ function uc_checkout_pane_cf_sms($op, &$arg1, $arg2) {
 			}
 			
 			// if no user ID, they can't sign up for SMS opt-in features
-			if ($user_id <= 0)
+			if ($user_id <= 0) {
 				return $contents;
 			}
 			
@@ -146,6 +144,7 @@ function uc_checkout_pane_cf_sms($op, &$arg1, $arg2) {
 				$mobile_num = '';
 				$user_features = '';
 				db_query("INSERT INTO {cf_sms_user} id, mobile_num, features VALUES (%d, '', '')", $user_id);
+			}
 			else {
 				$record = db_fetch_array($data);
 				$user_features = $record['features'];
@@ -187,7 +186,7 @@ function uc_checkout_pane_cf_sms($op, &$arg1, $arg2) {
    		
    		$description = variable_get('cf_sms_signup_message', CF_SMS_SIGNUP_MESSAGE);
    		
-			$pane = array('description' => $description, 'contents' => $contents)
+			$pane = array('description' => $description, 'contents' => $contents);
 			
 			return $pane;
 

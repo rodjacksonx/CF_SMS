@@ -73,7 +73,7 @@ function cf_sms_settings() {
 		'#default_value' => variable_get('cf_sms_debug_mode', 0),
     '#summary' => variable_get('cf_sms_debug_mode' ,0) ?
 			t('Debug mode is OFF: anyone can sign up for SMS features.') :
-			t('Debug mode is ON: only admins can sign up for SMS features.');
+			t('Debug mode is ON: only admins can sign up for SMS features.'),
 		'#description' => t('This allows restricting SMS signup to only site administrators, primarily for testing and/or debugging purposes.'),
 	);
 	$form['cf_sms_signup_message'] = array(
@@ -81,7 +81,7 @@ function cf_sms_settings() {
 		'#title' => t('SMS signup message'),
 		'#default_value' => variable_get('cf_sms_signup_message', CF_SMS_SIGNUP_MESSAGE),
 		'#summary' => t('Current message to use to prompt users to sign up for SMS features:') .
-			'<br />' . variable_get('cf_sms_signup_message', CF_SMS_SIGNUP_MESSAGE);
+			'<br />' . variable_get('cf_sms_signup_message', CF_SMS_SIGNUP_MESSAGE),
 		'#description' =>
 			t('Message to display to prompt users to sign up for SMS features.'),
 	);
@@ -138,6 +138,7 @@ function cf_sms_user($type, $edit, &$user, $category = NULL) {
 				$mobile_num = '';
 				$user_features = '';
 				db_query("INSERT INTO {cf_sms_user} id, mobile_num, features VALUES (%d, '', '')", $user_id);
+			}
 			else {
 				$record = db_fetch_array($data);
 				$user_features = $record['features'];
@@ -163,8 +164,8 @@ function cf_sms_user($type, $edit, &$user, $category = NULL) {
 					'#type' => 'textfield',
 					'#title' => t('Mobile number for texting'),
 					'#default_value' => _cf_sms_display_mobile_num($mobile_num),
-					'#summary' => t('Mobile number to receive SMS notifications: ') . $mobile_num;
-					'#description' => t("Number where SMS notifications should be sent. (All texts will be sent from the U.S.; international numbers must be prefixed with '") . '<i>' . '011' . "</i>'.)"),
+					'#summary' => t('Mobile number to receive SMS notifications: ') . $mobile_num,
+					'#description' => t("Number where SMS notifications should be sent. (All texts will be sent from the U.S.; international numbers must be prefixed with '") . '<i>' . '011' . "</i>'.)",
 				);
     
     		$form['cf_sms_user_settings']['cf_sms_optin_settings_prompt'] = array(
@@ -642,7 +643,7 @@ function _update_time_based_on_recurrence($t, $recur) {
 			$min = $d['minutes'];
 			$sec = $d['seconds'];
 			$weekday = $d['wday'];
-			$time = array('hours' => $hour, 'minutes' => $min, 'seconds' => $sec)
+			$time = array('hours' => $hour, 'minutes' => $min, 'seconds' => $sec);
 			
 			// we'll just do this in a straightforward fashion; advance to
 			// the next month, then find the Xth weekday of that month. If
@@ -693,7 +694,7 @@ function _update_time_based_on_recurrence($t, $recur) {
 			// not a weekday, keep adding 86400 seconds until it is
 			$updated_t = $t + 86400;
 			$d = getdate($updated_t);
-			while (($d['wday'] == 0) || ($d['wday'] == 6) {
+			while (($d['wday'] == 0) || ($d['wday'] == 6)) {
 				$updated_t += 86400;
 				$d = getdate($updated_t);
 			}
