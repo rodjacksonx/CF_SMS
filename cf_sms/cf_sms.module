@@ -78,6 +78,14 @@ function cf_sms_settings() {
 			t('Debug mode is ON: only admins can sign up for SMS features.'),
 		'#description' => t('This allows restricting SMS signup to only site administrators, primarily for testing and/or debugging purposes.'),
 	);
+	$form['general']['cf_sms_default_from_num'] = array(
+		'#type' => 'textfield',
+		'#title' => t('"From" phone number'),
+		'#default_value' => _cf_sms_extract_mobile_num(variable_get('cf_sms_default_from_num', variable_get('callfire_default_from_num', ''))),
+    '#summary' => t('Default "from" phone number is currently set as: <br /> %from', array('%from' => _cf_sms_extract_mobile_num(variable_get('cf_sms_default_from_num', variable_get('callfire_default_from_num', ''))))),
+		'#description' =>
+			t("The default phone number to use as the 'sent from' number for SMS sends. This should be a phone number you have on record with CallFire."),
+	);
 	$form['general']['cf_sms_signup_message'] = array(
 		'#type' => 'textarea',
 		'#rows' => 3,
@@ -143,14 +151,14 @@ function cf_sms_user($type, $edit, &$user, $category = NULL) {
 	
 		case 'form':
 		
-			$data = db_query("SELECT mobile_num, features FROM {cf_sms_users} WHERE id = %d", $user_id);
+			$data = db_fetch_array(db_query("SELECT mobile_num, features FROM {cf_sms_users} WHERE id = %d", $user_id));
 			if ($data === FALSE) {
 				$mobile_num = '';
 				$user_features = '';
 				db_query("INSERT INTO {cf_sms_user} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
 			}
 			else {
-				$record = db_fetch_array($data);
+				$record = $data;
 				$user_features = $record['features'];
 				$mobile_num = $record['mobile_num'];
 			}
@@ -258,25 +266,33 @@ function cf_sms_form_alter(&$form, &$form_state, $form_id) {
 function cf_sms_user_settings_validate($form, &$form_state) {
 
 	// get the user ID
-	$user_id = $form_state['values']['cf_sms_user_passthru'];
+	// first check to see if we're entering from Ubercart's checkout process
+	if (isset($form_state['values']['panes'])) {
+		$form_state_values = $form_state['values']['panes']['cf_sms'];
+	}
+	else {
+		$form_state_values = $form_state['values'];
+	}
+	// NOW get the user ID
+	$user_id = $form_state_values['cf_sms_user_passthru'];
 	if ((!variable_get('cf_sms_enabled', 0)) || ($user_id <= 0)) {
 		return;
 	}
 	
 	// get the user's SMS opt-in features list;
 	// if no record found, create a new, blank one
-	$data = db_query("SELECT features FROM {cf_sms_users} WHERE id = %d", $user_id);
+	$data = db_result(db_query("SELECT features FROM {cf_sms_users} WHERE id = %d", $user_id));
 	if ($data === FALSE) {
 		$features = '';
-		db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '%s', '')", $user_id, '0');
+		db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
 	}
 	else {
-		$features = db_result($data);
+		$features = $data;
 	}
 	
 	// presume that a blank mobile number, or a mobile number of 0,
 	// indicates the user is unsubscribing from all features
-	$mobile_num = _cf_sms_extract_mobile_num($form_state['values']['cf_sms_optin_mobile_num']);
+	$mobile_num = _cf_sms_extract_mobile_num($form_state_values['cf_sms_optin_mobile_num']);
 	if ((strlen($mobile_num) < 1) || ($mobile_num == '0')) {
 		$features = '';
 		$mobile_num = '';
@@ -284,7 +300,7 @@ function cf_sms_user_settings_validate($form, &$form_state) {
 	else {
 
 		// loop through and check all form elements
-		foreach ($form_state['values'] as $key => $form_element_value) {
+		foreach ($form_state_values as $key => $form_element_value) {
 	
 			// determine if the form element is a CallFire SMS opt-in feature setting
 			$pos = strpos($key, 'cf_sms_optin_feature_');
