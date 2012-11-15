@@ -115,12 +115,7 @@ function uc_checkout_pane_cf_sms($op, &$arg1, $arg2) {
 			$contents = array();
 
 			// get the user ID
-			if (isset($arg1->uid)) {
-				$user_id = $arg1->uid;
-			}
-			else {
-				$user_id = $user->uid;
-			}
+			$user_id = $user->uid;
 			
 			// if no user ID, they can't sign up for SMS opt-in features
 			if ($user_id <= 0) {
@@ -133,14 +128,14 @@ function uc_checkout_pane_cf_sms($op, &$arg1, $arg2) {
 			}
 
 			// load the user's features & phone num; if none, create new record
-			$data = db_query("SELECT mobile_num, features FROM {cf_sms_users} WHERE id = %d", $user_id);
+			$data = db_fetch_array(db_query("SELECT mobile_num, features FROM {cf_sms_users} WHERE id = %d", $user_id));
 			if ($data === FALSE) {
 				$mobile_num = '';
 				$user_features = '';
-				db_query("INSERT INTO {cf_sms_user} id, mobile_num, features VALUES (%d, '', '')", $user_id);
+				db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
 			}
 			else {
-				$record = db_fetch_array($data);
+				$record = $data;
 				$user_features = $record['features'];
 				$mobile_num = $record['mobile_num'];
 			}
@@ -167,11 +162,11 @@ function uc_checkout_pane_cf_sms($op, &$arg1, $arg2) {
   		  $feature_id_enabled = 'cf_sms_optin_feature_' . $feature_id . '_enabled';
 				if (variable_get($feature_id_enabled, 0)) {
 	  		  $tagged_feature_id = ':' . $feature_id . ';';
-	  		  $feature_id_signed_up = 'cf_sms_optin_feature_' . $feature_id . '_signedup';
+	  		  $feature_id_signedup = 'cf_sms_optin_feature_' . $feature_id . '_signedup';
 					$pos = strpos($user_features, $tagged_feature_id);
 					$contents[$feature_id_signedup] = array(
 						'#type' => 'checkbox',
-						'#title' => $feature['text'],
+						'#title' => '<b>' . $feature['name'] . ':</b> ' . $feature['text'],
 						'#default_value' => !($pos === FALSE),
 					);
      		}
