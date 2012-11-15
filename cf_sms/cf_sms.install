@@ -45,14 +45,14 @@ function cf_sms_schema() {
     'fields' => array(
       'id' => array(
         'description' => "Primary key: the user's ID.",
-        'type' => 'int',
+        'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
       'mobile_num' => array(
         'description' => "The user's mobile phone number.",
         'type' => 'varchar',
-        'length' => 15,
+        'length' => 31,
       ),
       'last_sms' => array(
         'description' => 'Timestamp of the last SMS sent to this user.',
