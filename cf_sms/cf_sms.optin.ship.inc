@@ -9,7 +9,7 @@
  */
  
 
-define('CF_SMS_OPTIN_DEFAULT_SHIP_MESSAGE', "!name, your !store order (#!order, for !total) has shipped.");
+define('CF_SMS_OPTIN_DEFAULT_SHIP_MESSAGE', "!name, your !org order (#!order, for !total) has shipped.");
 
 define('CALLFIRE_RESOURCE_NAMESPACE', "http://api.callfire.com/resource");
 
@@ -124,7 +124,7 @@ function cf_sms_optin_feature_ship_check($form, &$form_state) {
 		$message = str_replace('!name', $user_name, $message);
 		$message = str_replace('!order', $order_id, $message);
 		$message = str_replace('!total', $order_total, $message);
-		$message = str_replace('!store', variable_get('cf_sms_optin_feature_ship_store_name', ''), $message);
+		$message = str_replace('!org', variable_get('cf_sms_org_name', ''), $message);
 		// for the 'ship' feature we need to bundle the order ID,
 		// the mobile number and the user ID to send to
 		$data = 'order=' . $order_id . ':phone=' . $mobile_num . ':user=' . $user_id;
