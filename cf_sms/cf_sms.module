@@ -86,6 +86,14 @@ function cf_sms_settings() {
 		'#description' =>
 			t("The default phone number to use as the 'sent from' number for SMS sends. This should be a phone number you have on record with CallFire."),
 	);
+	$form['general']['cf_sms_org_name'] = array(
+		'#type' => 'textfield',
+		'#title' => t('Organization name'),
+		'#default_value' => variable_get('cf_sms_org_name', ''),
+    '#summary' => t('Organization name is currently set as: <br /> %org', array('%org' => variable_get('cf_sms_org_name', ''))),
+		'#description' =>
+			t("A short name of the organization (business, website, club, etc.) sending the SMS messages."),
+	);
 	$form['general']['cf_sms_signup_message'] = array(
 		'#type' => 'textarea',
 		'#rows' => 3,
@@ -485,6 +493,10 @@ function cf_sms_feature_settings() {
 			'#title' => '<b>' . $feature['name'] . ':</b> ' . $feature['text'],
 			'#default_value' => $feature['enabled'],
 		);
+		foreach ($feature['settings'] as $setting_name => $setting) {
+			$full_setting_name = 'cf_sms_optin_feature_' . $feature_id . '_' . $setting_name;
+			$features['optins'][$full_setting_name] = $setting;
+		}
 	}
 	
 	foreach ($response_features as $feature) {
@@ -505,6 +517,10 @@ function cf_sms_feature_settings() {
 			'#title' => '<b>' . $codeword . ':</b> ' . $feature['text'],
 			'#default_value' => $feature['enabled'],
 		);
+		foreach ($feature['settings'] as $setting_name => $setting) {
+			$full_setting_name = 'cf_sms_response_feature_' . $feature_id . '_' . $setting_name;
+			$features['responses'][$full_setting_name] = $setting;
+		}
 	}
 	
 	return $features;
@@ -563,7 +579,16 @@ function cf_sms_cf_sms_optin_features() {
 		'text' => 'Receive an SMS whenever your order ships.',
 		'filename' => 'cf_sms.optin.ship.inc',
 		'enabled' => variable_get('cf_sms_optin_feature_ship_enabled', FALSE),
-		//'funcname' => 'cf_sms_optin_feature_ship',
+		'settings' => array(
+			'message' => array(
+				'#type' => 'textarea',
+				'#rows' => 3,
+				'#resizable' => FALSE,
+				'#title' => t('Shipment notification message'),
+				'#default_value' => variable_get('cf_sms_optin_feature_ship_message', CF_SMS_OPTIN_DEFAULT_SHIP_MESSAGE),
+				'#description' => t('Message to send the customer when their order ships. You can use the special variables !name, !order, !total and/or !org to reference the customer first name, order number, or total order cost, or the short name of the store/website/organization sending the text message.'),
+			),
+		),
 	);
 	
 	// General Promotions: send user an SMS whenever any sort of promotion is announced
@@ -573,7 +598,7 @@ function cf_sms_cf_sms_optin_features() {
 		'text' => 'Receive an SMS whenever any promotion is announced.',
 		'filename' => 'cf_sms.optin.inc',
 		'enabled' => variable_get('cf_sms_optin_feature_promos_enabled', FALSE),
-		//'funcname' => 'cf_sms_optin_feature_promos',
+		'settings' => array(),
 	);
 	
 	// General Info: send user an SMS when any general site information is released
@@ -583,7 +608,7 @@ function cf_sms_cf_sms_optin_features() {
 		'text' => 'Receive an SMS whenever any general site info is released.',
 		'filename' => 'cf_sms.optin.inc',
 		'enabled' => variable_get('cf_sms_optin_feature_info_enabled', FALSE),
-		//'funcname' => 'cf_sms_optin_feature_info',
+		'settings' => array(),
 	);
 	
 	return $features;
@@ -617,7 +642,7 @@ function cf_sms_cf_sms_response_features() {
 		'filename' => 'cf_sms.response.inc',
 		'codeword' => 'STOP',
 		'enabled' => variable_get('cf_sms_response_feature_stop_enabled', FALSE),
-		//'funcname' => 'cf_sms_response_feature_stop',
+		'settings' => array(),
 	);
 	
 	// HELP: user sends this to get a helpful SMS (or two) about response features
@@ -628,7 +653,7 @@ function cf_sms_cf_sms_response_features() {
 		'filename' => 'cf_sms.response.inc',
 		'codeword' => array('HELP', '?'),
 		'enabled' => variable_get('cf_sms_response_feature_help_enabled', FALSE),
-		//'funcname' => 'cf_sms_response_feature_help',
+		'settings' => array(),
 	);
 	
 	// NEW: user sends this to get a copy of the latest promo or info SMS
@@ -639,7 +664,7 @@ function cf_sms_cf_sms_response_features() {
 		'filename' => 'cf_sms.response.inc',
 		'codeword' => array('NEW', 'NEWEST', 'LATEST'),
 		'enabled' => variable_get('cf_sms_response_feature_new_enabled', FALSE),
-		//'funcname' => 'cf_sms_response_feature_new',
+		'settings' => array(),
 	);
 	
 	// DAMAGE: user sends this to report a damaged shipment
@@ -650,7 +675,7 @@ function cf_sms_cf_sms_response_features() {
 		'filename' => 'cf_sms.response.inc',
 		'codeword' => array('DAMAGE', 'DAMAGED', 'DAMAGES'),
 		'enabled' => variable_get('cf_sms_response_feature_damage_enabled', FALSE),
-		//'funcname' => 'cf_sms_response_feature_damage',
+		'settings' => array(),
 	);
 	
 	// SIGNUP: user sends this to signup remotely for a specific opt-in feature
@@ -661,7 +686,7 @@ function cf_sms_cf_sms_response_features() {
 		'filename' => 'cf_sms.response.inc',
 		'codeword' => 'SIGNUP',
 		'enabled' => variable_get('cf_sms_response_feature_signup_enabled', FALSE),
-		//'funcname' => 'cf_sms_response_feature_signup',
+		'settings' => array(),
 	);
 
 	return $features;
