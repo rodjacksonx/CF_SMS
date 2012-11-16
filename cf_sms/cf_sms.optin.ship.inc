@@ -9,8 +9,6 @@
  */
  
 
-define('CF_SMS_OPTIN_DEFAULT_SHIP_MESSAGE', "!name, your !org order (#!order, for !total) has shipped.");
-
 define('CALLFIRE_RESOURCE_NAMESPACE', "http://api.callfire.com/resource");
 
 
