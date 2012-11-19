@@ -594,7 +594,7 @@ function cf_sms_cf_sms_optin_features() {
 				'#rows' => 3,
 				'#resizable' => FALSE,
 				'#title' => t('Shipment notification message'),
-				'#default_value' => variable_get('cf_sms_optin_feature_ship_message', "!name, your !org order (#!order, for !total) has shipped."),
+				'#default_value' => variable_get('cf_sms_optin_feature_ship_message', "!name, your !org order (for !total) has shipped. Your tracking number is !track"),
 				'#description' => t('Message to send the customer when their order ships. You can use the special variables !name, !order, !total, !carrier, !track and/or !org to reference the customer first name, order number, total order cost, carrier (UPS, etc.), or tracking number, or the short name of the store/website/organization sending the text message.'),
 			),
 		),
