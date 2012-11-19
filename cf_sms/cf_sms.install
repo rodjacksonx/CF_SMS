@@ -45,8 +45,7 @@ function cf_sms_schema() {
     'fields' => array(
       'id' => array(
         'description' => "Primary key: the user's ID.",
-        'type' => 'serial',
-        'unsigned' => TRUE,
+        'type' => 'int',
         'not null' => TRUE,
       ),
       'mobile_num' => array(
@@ -155,7 +154,7 @@ function cf_sms_schema() {
     'fields' => array(
       'id' => array(
         'description' => "Primary key: a unique ID per future send, for easier reference.",
-        'type' => 'int',
+        'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
