@@ -88,8 +88,11 @@ function cf_sms_optin_feature_ship_check($form, &$form_state) {
 	// if we're still continuing, then the feature is enabled, the user is
 	// signed up for it, and the status is set to 'Shipped'. But....
 	if ($continue) {
-		// Has an SMS for this order's shipping been sent already?
-		$db_data = db_query("SELECT data FROM {cf_sms_sends} WHERE feature_id = 'ship'");
+		// Has an SMS for this order's shipping been sent
+		// aready? Check records up to a week old.
+		$t = time();
+		$t_minus_one_week = $t - 604800;
+		$db_data = db_query("SELECT data FROM {cf_sms_sends} WHERE feature_id = 'ship' AND timestamp > %d", $t_minus_one_week);
 		$found = FALSE;
 		while ($data = db_result($db_data)) {
 			$parts = explode(':', $data); // break into 'order=###', 'phone=###' and 'user=###'
@@ -124,12 +127,18 @@ function cf_sms_optin_feature_ship_check($form, &$form_state) {
 	if ($continue) {
 		// setup a future SMS send, for right now, non-recurring
 		$t = time();
+		// get info for carrier and tracking number
+		$shipment = db_fetch_array(db_query("SELECT carrier, tracking_number FROM {uc_shipments} WHERE order_id = %d", $order_id));
+		$carrier = $shipment['carrier'];
+		$tracking_num = $shipment['tracking_number'];
 		// find and replace the variables in the message
 		$message = variable_get('cf_sms_optin_feature_ship_message', CF_SMS_OPTIN_DEFAULT_SHIP_MESSAGE);
 		$message = str_replace('!name', $user_name, $message);
 		$message = str_replace('!order', $order_id, $message);
 		$message = str_replace('!total', $order_total, $message);
 		$message = str_replace('!org', variable_get('cf_sms_org_name', ''), $message);
+		$message = str_replace('!carrier', $carrier, $message);
+		$message = str_replace('!track', $tracking_num, $message);
 		// for the 'ship' feature we need to bundle the order ID,
 		// the mobile number and the user ID to send to
 		$data = 'order=' . $order_id . ':phone=' . $mobile_num . ':user=' . $user_id;
