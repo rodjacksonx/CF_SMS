@@ -248,19 +248,19 @@ function cf_sms_form_alter(&$form, &$form_state, $form_id) {
 		// store the checked features on the user profile page into the DB
 		case 'user_profile_form':
 		
-			$form['#validate'][] = 'cf_sms_user_settings_validate';
+			$form['#submit'][] = 'cf_sms_user_settings_validate';
 			break;
 			
 		// allow the user to signup during checkout if using Ubercart
 		case 'uc_cart_checkout_form':
 		
-			$form['#validate'][] = 'cf_sms_user_settings_validate';
+			$form['#submit'][] = 'cf_sms_user_settings_validate';
 			break;
 			
 		// special case for the 'ship' opt-in feature, so it'll trigger on a form submit
 		case 'uc_order_view_update_form':
 			
-			$form['#validate'][] = 'cf_sms_optin_feature_ship_check';
+			$form['#submit'][] = 'cf_sms_optin_feature_ship_check';
 			break;
   }
 
@@ -273,6 +273,10 @@ function cf_sms_form_alter(&$form, &$form_state, $form_id) {
  */
 function cf_sms_user_settings_validate($form, &$form_state) {
 
+	if (!variable_get('cf_sms_enabled', 0)) {
+		return;
+	}
+
 	// get the user ID
 	// first check to see if we're entering from Ubercart's checkout process
 	if (isset($form_state['values']['panes'])) {
@@ -283,8 +287,13 @@ function cf_sms_user_settings_validate($form, &$form_state) {
 	}
 	// NOW get the user ID
 	$user_id = $form_state_values['cf_sms_user_passthru'];
-	if ((!variable_get('cf_sms_enabled', 0)) || ($user_id <= 0)) {
-		return;
+	// if user sms ID is negative, we had a new user with no real user ID;
+	// we still can't get anything except the order number right now, so
+	// create a record just using the negative of the order number for now
+	if ($user_id < 0) {
+		$order_id = intval($_SESSION['cart_order']);
+		$user_id = -$order_id;
+		db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
 	}
 	
 	// get the user's SMS opt-in features list;

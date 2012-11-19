@@ -30,6 +30,8 @@ function cf_sms_optin_feature_ship($message, $from_num, $data) {
 	db_query("INSERT INTO {cf_sms_sends} (id, message, timestamp, feature_id, from_num, data) VALUES (%d, '%s', %d, 'ship', %d, '%s')", $send_id, $message, $timestamp, $from_num, $data);
 	// record the user and the number we sent to
 	db_query("INSERT INTO {cf_sms_send_numbers} (send_id, user_id, number) VALUES (%d, %d, '%s')", $send_id, $user_id, $mobile_num);
+	// update the user's last SMS timestamp
+	db_query("UPDATE {cf_sms_users} SET last_sms = %d WHERE id = %d", $timestamp, $user_id);
 
 }
 
@@ -57,6 +59,11 @@ function cf_sms_optin_feature_ship_check($form, &$form_state) {
 		$user_name = $record['delivery_first_name'];
 		if ($user_name == '') {$user_name = 'CUSTOMER';}
 		$record = db_fetch_array(db_query("SELECT mobile_num, features FROM {cf_sms_users} WHERE id = %d", $user_id));
+		if ($record === FALSE) {
+			$old_user_id = -$order_id;
+			db_query("UPDATE {cf_sms_users} SET id = %d WHERE id = %d", $user_id, $old_user_id);
+			$record = db_fetch_array(db_query("SELECT mobile_num, features FROM {cf_sms_users} WHERE id = %d", $user_id));
+		}
 		$user_features = $record['features'];
 		$mobile_num = $record['mobile_num'];
 		

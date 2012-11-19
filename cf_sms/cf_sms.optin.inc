@@ -117,9 +117,10 @@ function uc_checkout_pane_cf_sms($op, &$arg1, $arg2) {
 			// get the user ID
 			$user_id = $user->uid;
 			
-			// if no user ID, they can't sign up for SMS opt-in features
+			// if no user ID, we need to keep track of what they sign up for;
+			// store a negative timestamp for now, replace with order # later
 			if ($user_id <= 0) {
-				return $contents;
+				$user_id = -time();
 			}
 			
 			// if SMS is in debug mode, but this isn't an admin, skip out
@@ -127,12 +128,11 @@ function uc_checkout_pane_cf_sms($op, &$arg1, $arg2) {
 				return $contents;
 			}
 
-			// load the user's features & phone num; if none, create new record
+			// load the user's features & phone num; if none, give blank values
 			$data = db_fetch_array(db_query("SELECT mobile_num, features FROM {cf_sms_users} WHERE id = %d", $user_id));
 			if ($data === FALSE) {
 				$mobile_num = '';
 				$user_features = '';
-				db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
 			}
 			else {
 				$record = $data;
