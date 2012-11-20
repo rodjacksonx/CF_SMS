@@ -290,7 +290,7 @@ function cf_sms_user_settings_validate($form, &$form_state) {
 	// if user sms ID is negative, we had a new user with no real user ID;
 	// we still can't get anything except the order number right now, so
 	// create a record just using the negative of the order number for now
-	if ($user_id < 0) {
+	if ($user_id <= 0) {
 		$order_id = intval($_SESSION['cart_order']);
 		$user_id = -$order_id;
 		db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
