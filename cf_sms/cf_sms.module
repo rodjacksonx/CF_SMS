@@ -293,18 +293,17 @@ function cf_sms_user_settings_validate($form, &$form_state) {
 	if ($user_id <= 0) {
 		$order_id = intval($_SESSION['cart_order']);
 		$user_id = -$order_id;
-		db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
-	}
-	
-	// get the user's SMS opt-in features list;
-	// if no record found, create a new, blank one
-	$data = db_result(db_query("SELECT features FROM {cf_sms_users} WHERE id = %d", $user_id));
-	if ($data === FALSE) {
 		$features = '';
-		db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
+		//db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
 	}
 	else {
-		$features = $data;
+		// get the user's SMS opt-in features list;
+		// if no record found, create a new, blank one
+		$features = db_result(db_query("SELECT features FROM {cf_sms_users} WHERE id = %d", $user_id));
+		if ($features === FALSE) {
+			$features = '';
+			//db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
+		}
 	}
 	
 	// presume that a blank mobile number, or a mobile number of 0,
@@ -352,7 +351,22 @@ function cf_sms_user_settings_validate($form, &$form_state) {
 		
 	} // end check for a blank mobile number
 	
-	db_query("UPDATE {cf_sms_users} SET mobile_num = '%s', features = '%s' WHERE id = %d", $mobile_num, $features, $user_id);
+	// see if they have a record yet
+	$data = db_result(db_query("SELECT mobile_num FROM {cf_sms_users} WHERE id = %d", $user_id));
+	// if they do not...
+	if ($data === FALSE) {
+		// then see if they include a mobile number and at least one feature. If so...
+		if (($mobile_num != '') && ($features != '')) {
+			// create a new record for the user
+			db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '%s', '%s')", $user_id, $mobile_num, $features);
+		}
+		// otherwise don't bother creating a record for the user
+	}
+	// but if they DO have a record already...
+	else {
+		// just update it
+		db_query("UPDATE {cf_sms_users} SET mobile_num = '%s', features = '%s' WHERE id = %d", $mobile_num, $features, $user_id);
+	}
 	
 	// while we're here, do the next scheduled sends
 	cf_sms_execute_next_scheduled_sends();
