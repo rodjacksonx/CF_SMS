@@ -210,7 +210,7 @@ function cf_sms_user($type, $edit, &$user, $category = NULL) {
 	  		  $feature_id_enabled = 'cf_sms_optin_feature_' . $feature_id . '_enabled';
 					if (variable_get($feature_id_enabled, 0)) {
 		  		  $tagged_feature_id = ':' . $feature_id . ';';
-		  		  $feature_id_signed_up = 'cf_sms_optin_feature_' . $feature_id . '_signedup';
+		  		  $feature_id_signedup = 'cf_sms_optin_feature_' . $feature_id . '_signedup';
 						$pos = strpos($user_features, $tagged_feature_id);
 						$form['cf_sms_user_settings'][$feature_id_signedup] = array(
 							'#type' => 'checkbox',
