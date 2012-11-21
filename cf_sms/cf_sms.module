@@ -483,6 +483,89 @@ function cf_sms_callfire_service() {
 
 
 /**
+ * Identifies and handles CallFire postbacks/notifications of incoming SMS service messages
+ */
+function cf_sms_callfire_notification($xml) {
+
+	$ret = NULL;
+	
+	if ((variable_get('cf_sms_enabled', 0)) && $xml) {
+	
+		$text = $xml->Text;
+		if (!$text) {
+			$ret = 'Error: no text found';
+			$continue = FALSE;
+		}
+	
+		if ($continue) {
+			$inbound = ($text->Inbound == TRUE);
+			if (!$inbound) {
+				$ret = 'Error: not an inbound text';
+				$continue = FALSE;
+			}
+		}
+	
+		if ($continue) {
+			$message = strtoupper((string)$text->Message);
+			$words = _cf_sms_text_to_words($message);
+			if ((!is_array($words)) || (count($words) < 1)) {
+				$ret = 'Error: no usable message in text';
+				$continue = FALSE;
+			}
+		}
+	
+		// at this point, we have a usable SMS, and a usable list
+		// of words in the SMS. The first is always the keyword,
+		// an indicator of what response feature to activate, with
+		// the remaining words being parameters for the feature
+		if ($continue) {
+			$keyword = $words[0];
+			unset($words[0]);
+		
+			$from = (string)$text->FromNumber;
+			$to = (string)$text->ToNumber;
+		
+			// get all response keywords our features have
+			$response_features = array_reverse(_get_all_cf_sms_response_features());
+			
+			foreach ($response_features as $feature) {
+				// don't even bother if the feature isn't enabled
+				if ($feature['enabled']) {
+					// check to see if the keyword matches
+					$codeword = $feature['codeword'];
+					if (!is_array($codeword)) {
+						$match = ($codeword == $keyword);
+					}
+					else {
+						$match = FALSE;
+						foreach ($codeword as $single_codeword) {
+							if ($single_codeword == $keyword) {
+								$match = TRUE;
+								break;
+							}
+						}
+					}
+					// if the feature matches the keyword, execute the feature
+					if ($match) {
+						$funcname = 'cf_sms_response_feature_' . $feature['id'];
+						$ret = call_user_func($funcname, $from, $to, $words);
+						break;
+					}
+				} // end of check to see if this feature is enabled
+			} // end of loop through all response features
+		
+		} // end of last $continue check for a usable SMS notification
+
+	} // end of check if SMS service is enabled & $xml is valid
+	
+	// while we're here, do the next scheduled sends
+	cf_sms_execute_next_scheduled_sends();
+
+	return $ret;
+}
+
+
+/**
  * Returns all the features, both opt-in and response, for the CallFire SMS
  * service, so that they can be enabled or disabled from the main settings
  */
@@ -858,6 +941,39 @@ function _update_time_based_on_recurrence($t, $recur) {
 	return $updated_t;
 
 } // end function - _update_time_based_on_recurrence
+
+
+/**
+ * Given a string, breaks the string into individual words,
+ * returning an array, each element being a single word
+ */
+function _cf_sms_text_to_words($text) {
+
+	$separators = " ,;\n\t\r" . chr(27) . chr(0);
+	
+	$words = array();
+	$current_word = '';
+	
+	for ($i = 0; $i < strlen($text); $i++) {
+		$c = $text[$i];
+		$pos = strpos($separators, $c);
+		if ($pos === FALSE) {
+			$current_word .= $c;
+		}
+		else {
+			if (strlen($current_word) > 0) {
+				$words[] = $current_word;
+				$current_word = '';
+			}
+		}
+	}
+	
+	if (strlen($current_word) > 0) {
+		$words[] = $current_word;
+	}
+	
+	return $words;
+}
 
 
 /**
