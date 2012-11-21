@@ -759,7 +759,17 @@ function cf_sms_cf_sms_response_features() {
 		'filename' => 'cf_sms.response.inc',
 		'codeword' => array('HELP', '?'),
 		'enabled' => variable_get('cf_sms_response_feature_help_enabled', FALSE),
-		'settings' => array(),
+		'settings' => array(
+			'message' => array(
+				'#type' => 'textarea',
+				'#rows' => 3,
+				'#size' => 160,
+				'#resizable' => FALSE,
+				'#title' => t('Help response message'),
+				'#default_value' => variable_get('cf_sms_response_feature_help_message', "Text NEW for the latest info or promo, SIGNUP to signup for an opt-in texting feature, or STOP to cancel an opt-in feature (STOP ALL to cancel all.)"),
+				'#description' => t("Message to send the customer when they text 'HELP' to our system."),
+			),
+		),
 	);
 	
 	// NEW: user sends this to get a copy of the latest promo or info SMS
@@ -770,7 +780,23 @@ function cf_sms_cf_sms_response_features() {
 		'filename' => 'cf_sms.response.inc',
 		'codeword' => array('NEW', 'NEWEST', 'LATEST'),
 		'enabled' => variable_get('cf_sms_response_feature_new_enabled', FALSE),
-		'settings' => array(),
+		'settings' => array(
+			'time_limit' => array(
+				'#type' => 'textfield',
+				'#title' => t('Maximum age of info/promo'),
+				'#default_value' => variable_get('cf_sms_response_feature_new_time_limit', 13),
+				'#description' => t("Maximum number of days to search for the most recent promo or info broadcast."),
+			),
+			'message' => array(
+				'#type' => 'textarea',
+				'#rows' => 3,
+				'#size' => 160,
+				'#resizable' => FALSE,
+				'#title' => t('No new info/promo message'),
+				'#default_value' => variable_get('cf_sms_response_feature_new_message', "Sorry, there have been no recent promos or info texts sent out. Check again soon!"),
+				'#description' => t("Message to send the customer when there have been no promo or info broadcasts within the set time limit."),
+			),
+		),
 	);
 	
 	// DAMAGE: user sends this to report a damaged shipment
