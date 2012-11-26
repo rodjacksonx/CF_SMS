@@ -151,7 +151,7 @@ function cf_sms_user($type, $edit, &$user, $category = NULL) {
 		return;
 	}
 	// if this isn't someone looking at their own profile, or an admin, skip out
-  if (($GLOBALS['user']->uid == $user_id) && !user_access('administer users')) {
+  if (!($GLOBALS['user']->uid == $user_id) && !user_access('administer users')) {
   	return;
   }
 	
@@ -163,7 +163,7 @@ function cf_sms_user($type, $edit, &$user, $category = NULL) {
 			if ($data === FALSE) {
 				$mobile_num = '';
 				$user_features = '';
-				db_query("INSERT INTO {cf_sms_user} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
+				db_query("INSERT INTO {cf_sms_users} (id, mobile_num, features) VALUES (%d, '', '')", $user_id);
 			}
 			else {
 				$record = $data;
@@ -488,8 +488,9 @@ function cf_sms_callfire_service() {
 function cf_sms_callfire_notification($xml) {
 
 	$ret = NULL;
+	$continue = TRUE;
 	
-	if ((variable_get('cf_sms_enabled', 0)) && $xml) {
+	if (variable_get('cf_sms_enabled', 0) && $xml) {
 	
 		$text = $xml->Text;
 		if (!$text) {
@@ -498,7 +499,7 @@ function cf_sms_callfire_notification($xml) {
 		}
 	
 		if ($continue) {
-			$inbound = ($text->Inbound == TRUE);
+			$inbound = (((boolean)$text->Inbound) == TRUE);
 			if (!$inbound) {
 				$ret = 'Error: not an inbound text';
 				$continue = FALSE;
