@@ -88,13 +88,13 @@ function cf_sms_response_feature_stop($from, $to, $words) {
 	} // end of check for further words
 	
 	// update the user's record
-	db_query("UPDATE ", $user_id, $features);
+	db_query("UPDATE {cf_sms_users} SET features = '%s' WHERE id = %d", $features, $user_id);
 	
 	// let them know they were successful (if they were)
-	if ($unsignups !== 0) {
-		$system_from = variable_get('callfire_default_from_num', '');
-		$ftext = ($unsignups == 1) ? 'feature' : 'features';
-		$unsignups = ($unsignups == 1) ? 'a' : $unsignups;
+	if ($unsignups != 0) {
+		$system_from = _cf_sms_extract_mobile_num(variable_get('cf_sms_default_from_num', variable_get('callfire_default_from_num', '')));
+		$ftext = ($unsignups === 1) ? 'feature' : 'features';
+		$unsignups = ($unsignups === 1) ? 'a' : $unsignups;
 		$message = 'STOP was successful; you have been unsubscribed from ' . $unsignups . ' text message ' . $ftext . '.';
 		// do the send
 		$timestamp = time();
@@ -113,11 +113,6 @@ function cf_sms_response_feature_stop($from, $to, $words) {
 	}
 	
 	// we are done
-	if ($unsignups !== 0) {
-	  return $unsignups;
-	}
-	else {
-		return FALSE;
-	}
+	return $unsignups;
 	
 }
